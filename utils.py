@@ -99,7 +99,7 @@ def IoU(box_1,box_2):
 
     return iou
 
-def NMS(detections,keep_thres = 0.5,overlap_threshold = 0.5):
+def NMS(detections,keep_thres = 0.3,overlap_threshold = 0.5):
 
     #print (detections.shape) #N,10647,cx,cy,w,h,80
     detections = detections.squeeze(0) #10647,85
@@ -111,7 +111,7 @@ def NMS(detections,keep_thres = 0.5,overlap_threshold = 0.5):
 
     _,indx = scores.sort(0)
 
-    indx = list(indx.numpy())
+    indx = list(indx.numpy())[:40]
 
     req_boxes = []
 
@@ -127,7 +127,8 @@ def NMS(detections,keep_thres = 0.5,overlap_threshold = 0.5):
                 if IoU(box1,box2).data[0][0] > overlap_threshold :
                     detections[next_ind,4] = 0
 
-    final = detections[req_boxes]
+    final = torch.cat([detections[x].unsqueeze(0) for x in req_boxes],0)
+
     final_coords = final[:,:4]
     _,final_classes = final[:,5:].max(1)
 
