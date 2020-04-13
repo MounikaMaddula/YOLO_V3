@@ -5,6 +5,7 @@ import torch
 import os
 from os.path import basename
 import glob
+from PIL import Image
 from torch.utils.data import Dataset, DataLoader 
 from torchvision import transforms
 from torch.autograd import Variable
@@ -16,7 +17,7 @@ import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
-from utils import corners_to_cxcy
+from utils import corners_to_cxcy, cxcy_to_corners
 
 class Data_Loader(Dataset):
 
@@ -27,10 +28,12 @@ class Data_Loader(Dataset):
         self.img_path = img_path
         self.xml_path = xml_path
         self.out_size = out_size
-        self.transforms = transforms.Normalize([0.43, 0.46, 0.45], [0.24, 0.23, 0.24])
+        self.transforms = transforms.Compose([transforms.Resize((416,416)),transforms.ToTensor(),  \
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])])
         self._lables_dict()
 
-        self.images = glob.glob(self.img_path+'/*.jpg')
+        self.images = glob.glob(self.img_path+'/*.jpg')[:5]
 
     def _lables_dict(self):
 
@@ -49,20 +52,20 @@ class Data_Loader(Dataset):
             image = gray2rgb(image)
             h,w,_ = image.shape 
 
+        #print (image.shape)
+
         new_h,new_w = self.out_size
         scale = new_h/h , new_w/w
 
-        image = resize(image,self.out_size) #h,w,3
-        image = image.transpose((2, 0, 1)) #3,h,w
-        image = torch.from_numpy(image)
-        image = self.transforms(image) #3,h,w
+        image = Image.open(img).convert('RGB')
+        image = self.transforms(image) #c,h,w
+
+        #img_bboxes - cx,cy,w,h
 
         img_bboxes[:,0] = img_bboxes[:,0] * scale[1]
         img_bboxes[:,1] = img_bboxes[:,1]*scale[0]
         img_bboxes[:,2] = img_bboxes[:,2] * scale[1]
         img_bboxes[:,3] =  img_bboxes[:,3]*scale[0]
-
-        #img_bboxes = img_bboxes.unsqueeze(0) #1,M,4
 
         return image, img_bboxes
 
@@ -76,7 +79,7 @@ class Data_Loader(Dataset):
         lables = []
         bnd_boxes = []
         for obj in root.findall('object') :
-            lables.append(obj.find('name').text)
+            lables.append(obj.find('name').text.lower())
             for bnd in obj.findall('bndbox'):
                 bnd_boxes.append([float(bnd.find('xmin').text),float(bnd.find('ymin').text),  \
                     float(bnd.find('xmax').text),float(bnd.find('ymax').text)])
@@ -86,14 +89,14 @@ class Data_Loader(Dataset):
     def __getitem__(self,ix):
 
         image = self.images[ix]
-        #print (image)
+
         xml_file = self.xml_path+'/' + basename(image).replace('.jpg','.xml')
 
         img_width, img_height, img_channel, lables, bnd_boxes = self._parse_xml(xml_file)
+        
+        bnd_boxes = torch.from_numpy(np.asarray(bnd_boxes)) #M,xmin,ymin,xmax,ymax
 
-        bnd_boxes = torch.from_numpy(np.asarray(bnd_boxes)) #M,4
-        #print (bnd_boxes.shape)
-        bnd_boxes = corners_to_cxcy(bnd_boxes) #M,4
+        bnd_boxes = corners_to_cxcy(bnd_boxes) #M,cx,cy,w,h
 
         lables = [self.lables_dict[x] for x in lables]
         lables = torch.from_numpy(np.asarray(lables)) #M
@@ -115,11 +118,15 @@ def main():
     for i in dataloader:
         try :
             image,bnd_boxes, lables =  i
-            print (image.shape, bnd_boxes.shape, lables.shape)
+            #print (image[:,1], image[:,2])
+            #print (bnd_boxes)
+            #print (image.shape, bnd_boxes.shape, lables.shape)
+            #print (image.mean(dim = 0))
         except Exception as e :
             print (e)
             print ('##############################################')
             exit()
+        break;
 
 
 if __name__ == '__main__':

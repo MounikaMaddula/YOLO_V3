@@ -5,12 +5,13 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
+
 def cxcy_to_corners(input_tensor):
     """
-    Converts cx,cy,h,w tensor to bbox tensor of shape xmin,ymin,xmax,ymax
+    Converts cx,cy,w,h tensor to bbox tensor of shape xmin,ymin,xmax,ymax
 
     Arguments:
-        input - tensor of shape N,cx,cy,h,w
+        input - tensor of shape N,cx,cy,w,h 
         output - tensor of shape N,xmin,ymin,xmax,ymax
     """
     xmin = input_tensor[:,0] - input_tensor[:,2]/2
@@ -29,12 +30,13 @@ def cxcy_to_corners(input_tensor):
 
 def corners_to_cxcy(input_tensor):
     """
-    Converts cx,cy,h,w tensor to bbox tensor of shape xmin,ymin,xmax,ymax
+    Converts cx,cy,w,h tensor to bbox tensor of shape xmin,ymin,xmax,ymax
 
     Arguments:
         input - tensor of shape N,xmin,ymin,xmax,ymax
-        output - tensor of shape N,cx,cy,h,w
+        output - tensor of shape N,cx,cy,w,h
     """
+
     cx = (input_tensor[:,0] + input_tensor[:,2])/2
     cy = (input_tensor[:,1] + input_tensor[:,3])/2
     h = input_tensor[:,3] - input_tensor[:,1]
@@ -43,10 +45,11 @@ def corners_to_cxcy(input_tensor):
     output = torch.zeros(input_tensor.shape[0],4)
     output[:,0] = cx
     output[:,1] = cy
-    output[:,2] = h
-    output[:,3] = w
+    output[:,2] = w
+    output[:,3] = h
 
     return output
+
 
 def intersection(box_1,box_2):
     """
@@ -69,7 +72,6 @@ def intersection(box_1,box_2):
 
     return width*height
 
-
 def IoU(box_1,box_2):
     """
     Computes the intersection area of 2 tensors
@@ -80,8 +82,7 @@ def IoU(box_1,box_2):
 
         Output - Intersection over union area of both boxes
                  Shape - N,M
-    """   
-
+    """
     N = box_1.shape[0]
     M = box_2.shape[0]
 

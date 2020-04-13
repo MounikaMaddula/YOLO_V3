@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+import math
 from torch.autograd import Variable
 
 
@@ -14,42 +15,51 @@ class DarkNet53(nn.Module):
         self.in_channels = in_channels
         self.Net()
 
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+
     def Net(self):
 
         self.conv1 = nn.Conv2d(in_channels = 3, out_channels = 32,kernel_size = 3, stride=1,padding=1)
-        self.conv1_bn = nn.BatchNorm2d(32)
+        self.conv1_bn = nn.BatchNorm2d(32,momentum=0.9, eps=1e-5)
         self.conv1_act = nn.LeakyReLU(0.1, inplace = True)
 
         self.conv2 = nn.Conv2d(in_channels = 32, out_channels = 64,kernel_size = 3, stride=2,padding=1)
-        self.conv2_bn = nn.BatchNorm2d(64)
+        self.conv2_bn = nn.BatchNorm2d(64,momentum=0.9, eps=1e-5)
         self.conv2_act = nn.LeakyReLU(0.1, inplace = True)  
 
         self.conv3_1 = nn.Conv2d(in_channels = 64, out_channels = 32,kernel_size = 1, stride=1,padding=0)
-        self.conv3_1_bn = nn.BatchNorm2d(32)
+        self.conv3_1_bn = nn.BatchNorm2d(32,momentum=0.9, eps=1e-5)
         self.conv3_1_act = nn.LeakyReLU(0.1, inplace = True) 
 
         self.conv3_2 = nn.Conv2d(in_channels = 32, out_channels = 64,kernel_size = 3, stride=1,padding=1)
-        self.conv3_2_bn = nn.BatchNorm2d(64)
+        self.conv3_2_bn = nn.BatchNorm2d(64,momentum=0.9, eps=1e-5)
         self.conv3_2_act = nn.LeakyReLU(0.1, inplace = True) 
         
         self.conv4 = nn.Conv2d(in_channels = 128, out_channels = 128,kernel_size = 3, stride=2,padding=1)
-        self.conv4_bn = nn.BatchNorm2d(128)
+        self.conv4_bn = nn.BatchNorm2d(128,momentum=0.9, eps=1e-5)
         self.conv4_act = nn.LeakyReLU(0.1, inplace = True) 
 
         self.conv5_1_1 = nn.Conv2d(in_channels = 128, out_channels = 64,kernel_size = 1, stride=1,padding=0)
-        self.conv5_1_1_bn = nn.BatchNorm2d(64)
+        self.conv5_1_1_bn = nn.BatchNorm2d(64,momentum=0.9, eps=1e-5)
         self.conv5_1_1_act = nn.LeakyReLU(0.1, inplace = True) 
         
         self.conv5_1_2 = nn.Conv2d(in_channels = 64, out_channels = 128,kernel_size = 3, stride=1,padding=1)
-        self.conv5_1_2_bn = nn.BatchNorm2d(128)
+        self.conv5_1_2_bn = nn.BatchNorm2d(128, momentum=0.9, eps=1e-5)
         self.conv5_1_2_act = nn.LeakyReLU(0.1, inplace = True) 
 
         self.conv5_2_1 = nn.Conv2d(in_channels = 256, out_channels = 64,kernel_size = 1, stride=1,padding=0)
-        self.conv5_2_1_bn = nn.BatchNorm2d(64)
+        self.conv5_2_1_bn = nn.BatchNorm2d(64, momentum=0.9, eps=1e-5)
         self.conv5_2_1_act = nn.LeakyReLU(0.1, inplace = True) 
         
         self.conv5_2_2 = nn.Conv2d(in_channels = 64, out_channels = 128,kernel_size = 3, stride=1,padding=1)
-        self.conv5_2_2_bn = nn.BatchNorm2d(128)
+        self.conv5_2_2_bn = nn.BatchNorm2d(128, momentum=0.9, eps=1e-5)
         self.conv5_2_2_act = nn.LeakyReLU(0.1, inplace = True) 
         
         self.conv6 = nn.Conv2d(in_channels = 384, out_channels = 256,kernel_size = 3, stride=2,padding=1)
@@ -223,7 +233,7 @@ class DarkNet53(nn.Module):
         self.conv11_4_2 = nn.Conv2d(in_channels = 512, out_channels = 1024,kernel_size = 3, stride=1,padding=1)
         self.conv11_4_2_bn = nn.BatchNorm2d(1024)
         self.conv11_4_2_act = nn.LeakyReLU(0.1, inplace = True)       
-        
+
     def forward(self,x):
 
         conv1 = self.conv1_act(self.conv1_bn(self.conv1(x)))
