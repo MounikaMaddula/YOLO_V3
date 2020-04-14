@@ -13,6 +13,8 @@ class MultiBox_Loss(nn.Module):
 
         self.centre_priors = yolo_model.prior_anchors() #M,cx,cy,w,h
         self.corner_prioirs = cxcy_to_corners(self.centre_priors)
+        self.strides = yolo_model.strides
+        print (self.strides)
         self.n_out = self.centre_priors.shape[1]
         self.pos_iou_threshold = pos_iou_threshold
         self.neg_iou_threshold = neg_iou_threshold
@@ -21,19 +23,30 @@ class MultiBox_Loss(nn.Module):
 
         #Initiating loss functions
         self.mse_loss = nn.MSELoss()
-        #self.mse_loss = nn.L1Loss()
         self.bce_loss = nn.BCELoss()
-        #self.conf_loss = nn.CrossEntropyLoss(reduce=False)
 
     def _process_targets_txty(self, targets, valid_index):
 
         anchors = Variable(self.centre_priors)[valid_index] #cx,cy,w,h
+        strides = self.strides[valid_index]
+        #print (strides.shape)
+
+        """
         tx = (targets[:,0] - anchors[:,0])/anchors[:,2]
         ty = (targets[:,1] - anchors[:,1])/anchors[:,3]
         th = torch.log(targets[:,3]/anchors[:,3])
         tw = torch.log(targets[:,2]/anchors[:,2])
 
         targets = torch.cat((tx.unsqueeze(1),ty.unsqueeze(1), tw.unsqueeze(1),th.unsqueeze(1)),1)
+        """
+
+        tx = (targets[:,0]-anchors[:,0])/strides
+        ty = (targets[:,1] - anchors[:,1])/strides
+        th = torch.log(targets[:,3]/anchors[:,3])
+        tw = torch.log(targets[:,2]/anchors[:,2])
+
+        targets = torch.cat((tx.unsqueeze(1),ty.unsqueeze(1), tw.unsqueeze(1),th.unsqueeze(1)),1)
+        
         return targets
 
     def _generate_targets(self, gt_boxes, gt_labels):
@@ -117,8 +130,6 @@ class MultiBox_Loss(nn.Module):
 
         obj_mask = (targets[:,4]==1).nonzero().squeeze(1).data
         non_obj_mask = (targets[:,4]==0).nonzero().squeeze(1).data
-        
-        #print (obj_mask.shape)
 
         pos_pred = predictions[obj_mask,:]
         neg_pred = predictions[non_obj_mask,:]
@@ -131,19 +142,15 @@ class MultiBox_Loss(nn.Module):
         loss_h = self.mse_loss(pos_pred[:,2],pos_target[:,2]) 
         loss_w = self.mse_loss(pos_pred[:,3],pos_target[:,3])
 
-        #print (loss_x.data[0], loss_y.data[0], loss_w.data[0], loss_h.data[0])
-
         try :
 
             loss_conf_obj = self.bce_loss(pos_pred[:,4],pos_target[:,4])
             loss_conf_nonobj = self.bce_loss(neg_pred[:,4],neg_target[:,4])
             loss_class = self.bce_loss(pos_pred[:,5:], pos_target[:,5:])
-            #print (loss_conf_obj.data[0], loss_conf_nonobj.data[0], loss_class.data[0])
-            #loss_class = self.conf_loss(pos_pred[:,5:],pos_target[;,5:].ma)
+
         except Exception as e:
             print (e)
 
-        total_loss = loss_x + loss_y + loss_w + loss_h + loss_conf_obj + loss_conf_nonobj + loss_class
-        #total_loss = loss_x + loss_y + loss_w + loss_h 
+        total_loss = (loss_x + loss_y + loss_w + loss_h) + (loss_conf_obj + loss_conf_nonobj + loss_class)
 
         return predictions,total_loss
