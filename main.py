@@ -23,15 +23,22 @@ from utils import *
 
 if __name__ == '__main__':
     
-    dataset = Data_Loader(img_path = '../Data/Images',xml_path = '../Data/XMLs')
-    dataloader = DataLoader(dataset,batch_size=1,shuffle=True, num_workers=1)
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    train_dataset = Data_Loader(img_path = '../Data/Images',xml_path = '../Data/XMLs')
+    train_dataloader = DataLoader(train_dataset,batch_size=1,shuffle=True, num_workers=1)
+
+    val_dataset = Data_Loader(img_path = '../Data/Images',xml_path = '../Data/XMLs')
+    val_dataloader = DataLoader(val_dataset,batch_size=1,shuffle=True, num_workers=1)
 
     model = YOLO_V3(in_channels = 3, out_classes = 1)
+    #model = model.to(device)
     criteria = MultiBox_Loss(yolo_model = model,pos_iou_threshold = 0.7,neg_iou_threshold = 0.3,n_sample = 256 ,pos_ratio = 0.5)
-
-    optimizer = optim.Adam(model.parameters(), lr= 0.0005,betas=(0.5, 0.999))
+    #criteria = criteria.to(device)
+    optimizer = optim.Adam(model.parameters(), lr= 5*1e-5,betas=(0.5, 0.999))
     #optimizer = optim.RMSprop(model.parameters(), lr=0.00005)
     #optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size= 10, gamma=0.8)
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size= 30, gamma=0.8)
 
-    train_model(dataloader, model,criteria,optimizer,exp_lr_scheduler,epochs = 1000,start_epoch = 0,out_dir = './chkpts')
+    train_model(train_dataloader,val_dataloader, model,criteria,optimizer,exp_lr_scheduler,  \
+        epochs = 1000,start_epoch = 0,out_dir = './chkpts')
