@@ -9,6 +9,19 @@ import math
 #importing custom modules
 from darknet_53 import DarkNet53
 
+#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+import torch._utils
+try:
+    torch._utils._rebuild_tensor_v2
+except AttributeError:
+    def _rebuild_tensor_v2(storage, storage_offset, size, stride, requires_grad, backward_hooks):
+        tensor = torch._utils._rebuild_tensor(storage, storage_offset, size, stride)
+        tensor.requires_grad = requires_grad
+        tensor._backward_hooks = backward_hooks
+        return tensor
+    torch._utils._rebuild_tensor_v2 = _rebuild_tensor_v2
+
 class YOLO_V3(nn.Module):
 
     def __init__(self, in_channels, out_classes):
@@ -18,11 +31,23 @@ class YOLO_V3(nn.Module):
         self.in_channels = in_channels
         self.out_classes = out_classes
         self.detect_out = 3 *(4 + 1 + self.out_classes)
-
+        """
         self.conv11_anchors = [(10,13),(16,30),(33,23)] #w,h
         self.conv8_anchors = [(30,61),( 62,45), (59,119)]
         self.conv6_anchors = [(116,90),(156,198),(373,326)]
+        """
+        self.conv6_anchors = [(10,13),(16,30),(33,23)] #w,h
+        self.conv8_anchors = [(30,61),( 62,45), (59,119)]
+        self.conv11_anchors = [(116,90),(156,198),(373,326)]
+        """
+        self.conv6_anchors = [(0.8,0.5),(0.5,0.2),(0.5,.7)] #w,h
+        self.conv8_anchors = [(0.8,0.5),(0.5,0.2),(0.5,.7)] 
+        self.conv11_anchors = [(0.8,0.5),(0.5,0.2),(0.5,.7)] 
+        """
+        
         self.darknet = DarkNet53(self.in_channels)
+        #state_dict = torch.load('../darknet53_weights_pytorch.pth',map_location={'cuda:0': 'cpu'})
+        #self.darknet.load_state_dict(state_dict, strict=False)
         self.Net()
 
         for m in self.modules():
@@ -63,8 +88,6 @@ class YOLO_V3(nn.Module):
         conv6_combined = torch.cat((conv6, conv8_up), 1)
         conv6_detect = self.conv6_detect(conv6_combined) #N,255,52,52
 
-        #print (conv11_detect, conv8_detect, conv6_detect)  
-
         conv11_detect = self.process_cnnoutput(conv11_detect) #N,13*13*3,85
         conv8_detect = self.process_cnnoutput(conv8_detect) #N,26*26*3,85
         conv6_detect = self.process_cnnoutput(conv6_detect) #N,52*52*3,85
@@ -79,8 +102,6 @@ class YOLO_V3(nn.Module):
         #Softmax the class scores
         prediction[:,:,5:] = torch.sigmoid(prediction[:,:, 5:])
         
-        #print (prediction.shape)
-
         return prediction
 
     def process_cnnoutput(self, cnn_output):
@@ -108,19 +129,24 @@ class YOLO_V3(nn.Module):
         grid_len_11 = np.arange(grid_size11)
         x_offset11,y_offset11 = np.meshgrid(grid_len_11, grid_len_11)
 
+        #x_offset11 = torch.FloatTensor(x_offset11).view(-1,1).to(device)
+        #y_offset11 = torch.FloatTensor(y_offset11).view(-1,1).to(device)
+
         x_offset11 = torch.FloatTensor(x_offset11).view(-1,1)
         y_offset11 = torch.FloatTensor(y_offset11).view(-1,1)
 
         x_y_offset11 = torch.cat((x_offset11, y_offset11), 1).repeat(1,3).view(-1,2).unsqueeze(0)
 
+        #conv11_anchors = torch.FloatTensor(conv11_anchors).to(device)
         conv11_anchors = torch.FloatTensor(conv11_anchors)
         conv11_anchors = conv11_anchors.repeat(grid_size11*grid_size11, 1).unsqueeze(0)
 
+        #priors11 = torch.zeros(1,13*13*3,self.out_classes+5).to(device)
         priors11 = torch.zeros(1,13*13*3,self.out_classes+5)
 
         priors11[:,:,:2] = x_y_offset11
         priors11[:,:,2:4] = conv11_anchors
-        priors11[:,:,:4] = priors11[:,:,:4]*stride11
+        #priors11[:,:,:4] = priors11[:,:,:4]*stride11
 
         conv8_anchors = [(a[0]/16,a[1]/16) for a in self.conv8_anchors]
         #conv8_anchors = [(np.sqrt(i),1/np.sqrt(i)) for i in self.conv8_anchors]
@@ -131,19 +157,24 @@ class YOLO_V3(nn.Module):
         grid_len_8 = np.arange(grid_size8)
         x_offset8,y_offset8 = np.meshgrid(grid_len_8, grid_len_8)
 
+        #x_offset8 = torch.FloatTensor(x_offset8).view(-1,1).to(device)
+        #y_offset8 = torch.FloatTensor(y_offset8).view(-1,1).to(device)
+
         x_offset8 = torch.FloatTensor(x_offset8).view(-1,1)
         y_offset8 = torch.FloatTensor(y_offset8).view(-1,1)
 
         x_y_offset8 = torch.cat((x_offset8, y_offset8), 1).repeat(1,3).view(-1,2).unsqueeze(0)
 
+        #conv8_anchors = torch.FloatTensor(conv8_anchors).to(device)
         conv8_anchors = torch.FloatTensor(conv8_anchors)
         conv8_anchors = conv8_anchors.repeat(grid_size8*grid_size8, 1).unsqueeze(0)
 
+        #priors8 = torch.zeros(1,26*26*3,self.out_classes+5).to(device)
         priors8 = torch.zeros(1,26*26*3,self.out_classes+5)
 
         priors8[:,:,:2] = x_y_offset8
         priors8[:,:,2:4] = conv8_anchors
-        priors8[:,:,:4] = priors8[:,:,:4]*stride8
+        #priors8[:,:,:4] = priors8[:,:,:4]*stride8
 
         conv6_anchors = [(a[0]/8,a[1]/8) for a in self.conv6_anchors]
         #conv6_anchors = [(np.sqrt(i),1/np.sqrt(i)) for i in self.conv6_anchors]
@@ -154,23 +185,43 @@ class YOLO_V3(nn.Module):
         grid_len_6 = np.arange(grid_size6)
         x_offset6,y_offset6 = np.meshgrid(grid_len_6, grid_len_6)
 
+        #x_offset6 = torch.FloatTensor(x_offset6).view(-1,1).to(device)
+        #y_offset6 = torch.FloatTensor(y_offset6).view(-1,1).to(device)
+
         x_offset6 = torch.FloatTensor(x_offset6).view(-1,1)
         y_offset6 = torch.FloatTensor(y_offset6).view(-1,1)
 
         x_y_offset6 = torch.cat((x_offset6, y_offset6), 1).repeat(1,3).view(-1,2).unsqueeze(0)
 
+        #conv6_anchors = torch.FloatTensor(conv6_anchors).to(device)
         conv6_anchors = torch.FloatTensor(conv6_anchors)
         conv6_anchors = conv6_anchors.repeat(grid_size6*grid_size6, 1).unsqueeze(0)
 
         priors6 = torch.zeros(1,52*52*3,self.out_classes+5)
+        #priors6 = torch.zeros(1,52*52*3,self.out_classes+5).to(device)
 
         priors6[:,:,:2] = x_y_offset6
         priors6[:,:,2:4] = conv6_anchors
-        priors6[:,:,:4] = priors6[:,:,:4]*stride6
+        #priors6[:,:,:4] = priors6[:,:,:4]*stride6
 
         priors = torch.cat((priors11,priors8,priors6),1)
         priors = priors.squeeze(0)  #10647,85 #10647,cx,cy,w,h,80
 
-        #print (priors.shape)
+        return priors11.squeeze(0), priors8.squeeze(0), priors6.squeeze(0)
 
-        return priors
+    def detect(self,predictions, pos_thres = 0.5, IoU_thres = 0.5):
+
+        batch_size = predictions.shape[0]
+        anchors = self.prior_anchors()
+        strides = self.strides
+
+        for batch in range(batch_size) :
+            pred = predictions[batch,:]
+            print (pred.shape)
+            pred = pred.squeeze(0).data
+            pred[:,0] = pred[:,0]*self.strides + anchors[:,0]
+            pred[:,1] = pred[:,1]*self.strides + anchors[:,1]
+            pred[:,2] = torch.exp(pred[:,2]) * anchors[:,2]
+            pred[:,3] = torch.exp(pred[:,3]) * anchors[:,3]
+            pred = pred[(pred[:,4]>=0.7).nonzero().squeeze(1)]
+            print (pred[:,:4].shape)
