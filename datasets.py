@@ -33,7 +33,7 @@ class Data_Loader(Dataset):
                                  std=[0.229, 0.224, 0.225])])
         self._lables_dict()
 
-        self.images = glob.glob(self.img_path+'/*.jpg')[:5]
+        self.images = glob.glob(self.img_path+'/*.jpg')[:1]
 
     def _lables_dict(self):
 
@@ -43,25 +43,12 @@ class Data_Loader(Dataset):
 
         self.lables_dict = lables_dict
 
-    def _resize(self,img, img_bboxes):
-
-        image = io.imread(img) 
-        try :
-            h,w,_ = image.shape  #h,w,3
-        except :
-            image = gray2rgb(image)
-            h,w,_ = image.shape 
-
-        #print (image.shape)
-
-        new_h,new_w = self.out_size
-        scale = new_h/h , new_w/w
+    def _resize(self,img, img_bboxes, scale):
 
         image = Image.open(img).convert('RGB')
         image = self.transforms(image) #c,h,w
 
         #img_bboxes - cx,cy,w,h
-
         img_bboxes[:,0] = img_bboxes[:,0] * scale[1]
         img_bboxes[:,1] = img_bboxes[:,1]*scale[0]
         img_bboxes[:,2] = img_bboxes[:,2] * scale[1]
@@ -74,8 +61,10 @@ class Data_Loader(Dataset):
         tree = ET.parse(filename)
         root = tree.getroot()
         filename = root.find('filename').text
+        
         for size in root.findall('size') :
             img_width, img_height,img_channel = size.find('width').text, size.find('height').text, size.find('depth').text
+        
         lables = []
         bnd_boxes = []
         for obj in root.findall('object') :
@@ -83,28 +72,30 @@ class Data_Loader(Dataset):
             for bnd in obj.findall('bndbox'):
                 bnd_boxes.append([float(bnd.find('xmin').text),float(bnd.find('ymin').text),  \
                     float(bnd.find('xmax').text),float(bnd.find('ymax').text)])
+        
         return img_width, img_height, img_channel, lables, bnd_boxes
 
 
     def __getitem__(self,ix):
 
         image = self.images[ix]
+        #print (image)
 
         xml_file = self.xml_path+'/' + basename(image).replace('.jpg','.xml')
 
         img_width, img_height, img_channel, lables, bnd_boxes = self._parse_xml(xml_file)
+
+        scale = 1/int(img_height),1/int(img_width)
         
         bnd_boxes = torch.from_numpy(np.asarray(bnd_boxes)) #M,xmin,ymin,xmax,ymax
-
         bnd_boxes = corners_to_cxcy(bnd_boxes) #M,cx,cy,w,h
 
         lables = [self.lables_dict[x] for x in lables]
         lables = torch.from_numpy(np.asarray(lables)) #M
 
-        image,bnd_boxes = self._resize(image, bnd_boxes) #3,h,w;M,4
+        image,bnd_boxes = self._resize(image, bnd_boxes,scale) #3,h,w;M,4
 
         return image,bnd_boxes, lables
-
 
     def __len__(self):
         return len(self.images)
@@ -118,10 +109,6 @@ def main():
     for i in dataloader:
         try :
             image,bnd_boxes, lables =  i
-            #print (image[:,1], image[:,2])
-            #print (bnd_boxes)
-            #print (image.shape, bnd_boxes.shape, lables.shape)
-            #print (image.mean(dim = 0))
         except Exception as e :
             print (e)
             print ('##############################################')
